@@ -1,0 +1,25 @@
+{
+  "name": "alihack",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "capture": "tsx src/index.ts capture",
+    "listen": "tsx src/index.ts listen",
+    "once": "tsx src/index.ts run",
+    "postinstall": "node scripts/fix-key-listener-perms.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.117.0",
+    "node-global-key-listener": "^0.3.0",
+    "zod": "^4.3.6"
+  }
+}
