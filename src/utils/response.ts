@@ -1,23 +1,38 @@
 import type { McpToolCallItem, ThreadItem } from "@openai/codex-sdk";
 
-export interface AgentToolCall {
+export type AgentMode = "code" | "default" | "personality";
+export type AgentBackend = "codex" | "claude" | "all";
+
+export interface CodexToolCall {
+  backend: "codex";
   server: string;
   tool: string;
   status: McpToolCallItem["status"];
   errorMessage: string | null;
 }
 
+export interface ClaudeToolCall {
+  backend: "claude";
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+export type AgentToolCall = CodexToolCall | ClaudeToolCall;
+
 export interface AgentStructuredResponse<T> {
-  threadId: string;
+  backend: AgentBackend;
+  sessionId: string;
   rawText: string;
   data: T;
   toolCalls: AgentToolCall[];
+  costUsd?: number;
 }
 
-export function extractToolCalls(items: ThreadItem[]): AgentToolCall[] {
+export function extractCodexToolCalls(items: ThreadItem[]): CodexToolCall[] {
   return items
     .filter((item): item is McpToolCallItem => item.type === "mcp_tool_call")
     .map((item) => ({
+      backend: "codex" as const,
       server: item.server,
       tool: item.tool,
       status: item.status,

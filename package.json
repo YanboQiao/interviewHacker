@@ -1,14 +1,11 @@
 {
-  "name": "alihack",
+  "name": "interview-hacker",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "capture": "tsx src/index.ts capture",
-    "listen": "tsx src/index.ts listen",
-    "once": "tsx src/index.ts run",
+    "listen": "tsx src/index.ts",
     "postinstall": "node scripts/fix-key-listener-perms.mjs",
     "typecheck": "tsc --noEmit"
   },
@@ -18,6 +15,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
     "@openai/codex-sdk": "^0.117.0",
     "node-global-key-listener": "^0.3.0",
     "zod": "^4.3.6"

@@ -1,34 +1,28 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import {
-  Codex,
-  type ApprovalMode,
-  type ModelReasoningEffort,
-  type SandboxMode,
-  type Thread,
-  type ThreadOptions,
-} from "@openai/codex-sdk";
+import { Codex, type ApprovalMode, type ModelReasoningEffort, type SandboxMode, type Thread, type ThreadOptions } from "@openai/codex-sdk";
 
-import { imageCodeMailerInstructions } from "../instructions/image-code-mailer.js";
+import { getInstructions } from "../instructions/index.js";
 import {
   imageCodeMailerJsonSchema,
   imageCodeMailerOutputSchema,
   type ImageCodeMailerOutput,
 } from "../schemas/image-code-mailer.js";
 import {
-  extractToolCalls,
+  extractCodexToolCalls,
   toPlainObject,
+  type AgentMode,
   type AgentStructuredResponse,
 } from "../utils/response.js";
 
 interface ImageCodeMailerAgentOptions {
   profile?: string;
   model?: string;
+  mode?: AgentMode;
   modelReasoningEffort?: ModelReasoningEffort;
   sandboxMode?: SandboxMode;
   approvalPolicy?: ApprovalMode;
-  developerInstructions?: string;
 }
 
 export interface ImageCodeMailerRunInput {
@@ -56,7 +50,7 @@ export class ImageCodeMailerAgent {
     this.modelReasoningEffort = options.modelReasoningEffort;
     this.sandboxMode = "danger-full-access";
     this.approvalPolicy = "never";
-    this.developerInstructions = imageCodeMailerInstructions;
+    this.developerInstructions = getInstructions(options.mode ?? "code");
   }
 
   async run(input: ImageCodeMailerRunInput): Promise<AgentStructuredResponse<ImageCodeMailerOutput>> {
@@ -129,24 +123,21 @@ export class ImageCodeMailerAgent {
   }
 
   private buildRunPrompt(input: ImageCodeMailerRunInput): string {
-    const subject = input.subject ?? "Codex generated code";
-    const shouldSendEmail = true;
+    const subject = input.subject ?? "Agent generated answer";
 
     return [
-      shouldSendEmail
-        ? "Analyze the attached image, write the requested code in the workspace, and then email the result."
-        : "Analyze the attached image and write the requested code in the workspace. Do not send any email for this run.",
+      "Analyze the attached image and follow the system instructions to produce the answer, then email the result.",
       `Working directory: ${input.workingDirectory}`,
       "Recipient email: send the email to the currently authenticated Gmail account itself.",
       `Email subject: ${subject}`,
-      `Coding request: ${input.prompt}`,
+      `Request: ${input.prompt}`,
       "The final response must be valid JSON that matches the provided schema exactly.",
     ].join("\n\n");
   }
 
   private toResponse(
     rawText: string,
-    items: Parameters<typeof extractToolCalls>[0],
+    items: Parameters<typeof extractCodexToolCalls>[0],
   ): AgentStructuredResponse<ImageCodeMailerOutput> {
     if (!this.thread?.id) {
       throw new Error("No active thread id");
@@ -157,10 +148,11 @@ export class ImageCodeMailerAgent {
     const payload = toPlainObject(JSON.parse(rawText));
 
     return {
-      threadId: this.threadId,
+      backend: "codex",
+      sessionId: this.threadId,
       rawText,
       data: imageCodeMailerOutputSchema.parse(payload),
-      toolCalls: extractToolCalls(items),
+      toolCalls: extractCodexToolCalls(items),
     };
   }
 }

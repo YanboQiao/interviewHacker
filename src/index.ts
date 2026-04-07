@@ -1,141 +1,71 @@
-import { resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout } from "node:process";
 
-import { ImageCodeMailerAgent } from "./agents/image-code-mailer-agent.js";
 import { DEFAULT_TRIGGER_HOTKEY } from "./hotkeys/trigger-hotkey.js";
-import { captureAndSend, type CaptureAndSendInput } from "./workflows/capture-and-send.js";
 import { listenAndSend } from "./workflows/listen-and-send.js";
+import type { AgentBackend, AgentMode } from "./utils/response.js";
 
-type CommandName = "run" | "capture" | "listen";
-const LISTEN_PROMPT = "请完成图片所示的题目，把答案或者代码发送到我的邮箱中";
-
-interface CommonArgs {
-  prompt: string;
-  subject?: string;
-}
-
-interface RunArgs extends CommonArgs {
-  imagePath: string;
-  workingDirectory: string;
-}
+const PROMPT_BY_MODE: Record<AgentMode, string> = {
+  code: "请完成图片所示的题目，把答案或者代码发送到我的邮箱中",
+  default: "请分析图片中的内容，把答案发送到我的邮箱中",
+  personality: "请分析图片中的性格测试题目，给出最优选项，把答案发送到我的邮箱中",
+};
 
 async function main() {
-  const rawArgs = process.argv.slice(2);
-  const command = parseCommand(rawArgs);
-  const restArgs = command ? rawArgs.slice(1) : rawArgs;
-  const requestedHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+  let mode: AgentMode = "code";
+  let backend: AgentBackend = "codex";
 
-  if (command === "listen") {
-    await listenAndSend({
-      prompt: LISTEN_PROMPT,
-      workingDirectory: process.cwd(),
-    });
-    return;
-  }
+  console.log("\n=== Interview Hacker ===\n");
 
-  if (command === "capture") {
-    const args = parseCommonArgs(restArgs);
-
-    if (!args) {
-      printUsage();
-      process.exitCode = requestedHelp ? 0 : 1;
-      return;
+  if (stdin.isTTY) {
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+      mode = await askMode(rl);
+      backend = await askBackend(rl);
+    } finally {
+      rl.close();
     }
-
-    await captureAndSend({
-      ...args,
-      workingDirectory: process.cwd(),
-    });
-    return;
+  } else {
+    console.log("  Non-interactive mode, using defaults: mode=code, backend=codex\n");
   }
 
-  const args = parseRunArgs(command ? restArgs : rawArgs);
+  console.log(`\n  Mode:    ${mode}`);
+  console.log(`  Backend: ${backend}`);
+  console.log(`  Hotkey:  ${DEFAULT_TRIGGER_HOTKEY}`);
+  console.log("\n  Listening... Press hotkey to capture screenshot.\n");
 
-  if (!args) {
-    printUsage();
-    process.exitCode = requestedHelp ? 0 : 1;
-    return;
-  }
-
-  const agent = new ImageCodeMailerAgent();
-  const result = await agent.run(args);
-  console.log(JSON.stringify(result, null, 2));
-}
-
-function parseCommand(argv: string[]): CommandName | null {
-  const candidate = argv[0];
-
-  if (candidate === "run" || candidate === "capture" || candidate === "listen") {
-    return candidate;
-  }
-
-  return null;
-}
-
-function parseRunArgs(argv: string[]): RunArgs | null {
-  const common = parseCommonArgs(argv);
-
-  if (!common) {
-    return null;
-  }
-
-  const imagePath = readOption(argv, "--image");
-  if (!imagePath) {
-    return null;
-  }
-
-  return {
-    ...common,
-    imagePath: resolve(imagePath),
+  await listenAndSend({
+    prompt: PROMPT_BY_MODE[mode],
     workingDirectory: process.cwd(),
-  };
+    backend,
+    mode,
+  });
 }
 
-function parseCommonArgs(argv: string[]): CommonArgs | null {
-  const prompt = readOption(argv, "--prompt");
+async function askMode(rl: ReturnType<typeof createInterface>): Promise<AgentMode> {
+  console.log("  Select mode:");
+  console.log("    1. code        - Code / algorithm problems (default)");
+  console.log("    2. personality  - Personality / competency tests");
+  console.log("    3. default      - General image Q&A");
 
-  if (!prompt) {
-    return null;
-  }
+  const answer = (await rl.question("\n  Enter choice [1]: ")).trim();
 
-  return {
-    prompt,
-    subject: readOption(argv, "--subject") ?? undefined,
-  };
+  if (answer === "2") return "personality";
+  if (answer === "3") return "default";
+  return "code";
 }
 
-function readOption(argv: string[], name: string) {
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
+async function askBackend(rl: ReturnType<typeof createInterface>): Promise<AgentBackend> {
+  console.log("\n  Select backend:");
+  console.log("    1. codex  - OpenAI Codex (default)");
+  console.log("    2. claude - Claude Opus 4.6");
+  console.log("    3. all    - Both in parallel (compare results)");
 
-    if (arg === "--" || arg === "--help" || arg === "-h") {
-      continue;
-    }
+  const answer = (await rl.question("\n  Enter choice [1]: ")).trim();
 
-    if (arg === name) {
-      const value = argv[index + 1];
-
-      if (!value || value.startsWith("--")) {
-        throw new Error(`Missing value for argument: ${name}`);
-      }
-
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function printUsage() {
-  console.log(
-    [
-      "Usage:",
-      "pnpm once -- --image <path> --prompt <text> [--subject <text>]",
-      "pnpm capture -- --prompt <text> [--subject <text>]",
-      "pnpm listen",
-      "",
-      `Default trigger hotkey: ${DEFAULT_TRIGGER_HOTKEY}`,
-    ].join("\n"),
-  );
+  if (answer === "2") return "claude";
+  if (answer === "3") return "all";
+  return "codex";
 }
 
 void main();

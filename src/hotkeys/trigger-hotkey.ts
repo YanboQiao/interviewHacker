@@ -1,6 +1,8 @@
 import type { IGlobalKeyDownMap, IGlobalKeyEvent } from "node-global-key-listener";
+import { platform } from "node:process";
 
-export const DEFAULT_TRIGGER_HOTKEY = "Control + Option + ;";
+export const DEFAULT_TRIGGER_HOTKEY =
+  platform === "darwin" ? "Control + Option + ;" : "Ctrl + Alt + ;";
 
 export function isTriggerHotkey(event: IGlobalKeyEvent, down: IGlobalKeyDownMap) {
   if (event.state !== "DOWN" || event.name !== "SEMICOLON") {
